@@ -1,11 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
-import { SocketProvider } from "./contexts/SocketContext"; 
-import { NotifProvider } from "./contexts/NotifContext"; 
-import { ToastContainer } from "./components/ToastContainer"; 
-
-// Halaman placeholder sebelum kamu salin halaman asli capstone kamu
-const TasksPage = () => <h2 style={{ padding: "2rem" }}>Halaman Utama Tugas (Real-time Terhubung)</h2>;
+import { SocketProvider } from "./contexts/SocketContext";
+import { NotifProvider } from "./contexts/NotifContext";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ToastContainer } from "./components/ToastContainer";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { TasksPage } from "./pages/TasksPage";
+import { ProfilePage } from "./pages/ProfilePage";
 
 export default function App() {
   return (
@@ -14,14 +16,21 @@ export default function App() {
         <NotifProvider>
           <BrowserRouter>
             <Routes>
-              {/* Sesuaikan rute ini dengan rute asli proyek capstone-mu */}
-              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              
+              <Route element={<ProtectedRoute />}>
+                <Route path="/" element={<Navigate to="/tasks" replace />} />
+                <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+              </Route>
+              
               <Route path="*" element={<Navigate to="/tasks" replace />} />
             </Routes>
+            
+            {/* Toast selalu tampil di semua halaman */}
+            <ToastContainer />
           </BrowserRouter>
-          
-          {/* Komponen Toast diletakkan di luar router agar melayang global */}
-          <ToastContainer /> 
         </NotifProvider>
       </SocketProvider>
     </AuthProvider>

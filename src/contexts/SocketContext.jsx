@@ -37,7 +37,22 @@ export const SocketProvider = ({ children }) => {
     });
 
     setSocket(socketInstance);
+// Di dalam SocketProvider (src/contexts/SocketContext.jsx)
+useEffect(() => {
+  const handleTokenRefresh = (e) => {
+    if (socketRef.current) {
+      // Update token otentikasi baru di socket yang sedang menempel
+      socketRef.current.auth = { token: e.detail.token };
+      // Putuskan dan sambung ulang instan agar server memverifikasi ulang
+      socketRef.current.disconnect().connect();
+    }
+  };
 
+  window.addEventListener("token:refreshed", handleTokenRefresh);
+  return () => {
+    window.removeEventListener("token:refreshed", handleTokenRefresh);
+  };
+}, []);
     // Cleanup function: memutus koneksi jika komponen unmount / logout
     return () => {
       socketInstance.disconnect();

@@ -9,6 +9,7 @@ export function NotifProvider({ children }) {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, ...toast }]);
     
+    // Hapus otomatis setelah 4 detik
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
