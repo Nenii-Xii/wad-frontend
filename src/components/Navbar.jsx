@@ -1,13 +1,10 @@
-// File: src/components/Navbar.jsx
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-// ── TAMBAHKAN IMPOR HOOK SOCKET ───────────────────────────────────
-import { useSocket } from "../contexts/SocketContext"; 
+import { useSocket } from "../contexts/SocketContext"; // Tambahan Week 9
 
 export function Navbar() {
   const { user, logout } = useAuth();
-  // ── AMBIL STATUS KONEKSI DAN COUNT USER ONLINE ──────────────────
-  const { isConnected, onlineCount } = useSocket(); 
+  const { onlineCount, isConnected } = useSocket(); // Tambahan Week 9
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -18,24 +15,25 @@ export function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-brand">
-        <Link App={Link} to="/tasks">WAD Task Manager</Link>
+        <Link to="/tasks">WAD Task Manager</Link>
       </div>
-      
       <div className="navbar-menu">
-        {/* ── INDIKATOR REAL-TIME (Langkah 13) ────────────────────── */}
-        <div className="rt-indicator">
-          <span 
-            className="rt-dot" 
-            style={{ background: isConnected ? "#4ade80" : "#f87171" }}
-            title={isConnected ? "Real-time aktif" : "Tidak terhubung"}
-          />
-          <span className="rt-label">
+        <Link to="/tasks">Tasks</Link>
+        <Link to="/profile">Profil</Link>
+        
+        {/* —— Fitur Indikator Online Tambahan Week 9 —— */}
+        <div className="online-indicator" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{
+            width: "10px",
+            height: "10px",
+            borderRadius: "50%",
+            backgroundColor: isConnected ? "#10b981" : "#ef4444"
+          }}></span>
+          <span style={{ fontSize: "0.875rem", color: "#6b7280" }}>
             {isConnected ? `${onlineCount} online` : "Offline"}
           </span>
         </div>
 
-        <Link to="/tasks">Tasks</Link>
-        <Link to="/profile">Profil</Link>
         <span className="navbar-user">Halo, {user?.name}</span>
         <button onClick={handleLogout} className="btn-logout">Keluar</button>
       </div>
