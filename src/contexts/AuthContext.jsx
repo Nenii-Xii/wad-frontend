@@ -1,5 +1,6 @@
+// src/contexts/AuthContext.jsx
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import api from "../lib/axios"; // Memakai axios instance yang sudah kita buat
+import api from "../lib/axios";
 import { TokenStore } from "../lib/tokenStore";
 
 const AuthContext = createContext(null);
@@ -8,7 +9,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Cek apakah ada sesi aktif saat aplikasi pertama kali dibuka
+  // Cek sesi aktif saat aplikasi pertama kali dibuka
   useEffect(() => {
     const restore = async () => {
       if (!TokenStore.isLoggedIn()) {
@@ -17,14 +18,11 @@ export function AuthProvider({ children }) {
       }
       try {
         const rfToken = TokenStore.getRefreshToken();
-        const response = await api.post("/auth/refresh", { refreshToken: rfToken });
-        TokenStore.setAccessToken(response.data.accessToken);
+        const { data } = await api.post("/auth/refresh", { refreshToken: rfToken });
+        TokenStore.setAccessToken(data.data.accessToken);
         
-        // Ambil data user profil
-        const me = await api.get("/auth/me", {
-          headers: { Authorization: `Bearer ${response.data.accessToken}` },
-        });
-        setUser(me.data);
+        const me = await api.get("/auth/me");
+        setUser(me.data.data);
       } catch (err) {
         TokenStore.clear();
       } finally {
@@ -36,7 +34,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const response = await api.post("/auth/login", { email, password });
-    const { accessToken, refreshToken, user: userData } = response.data;
+    const { accessToken, refreshToken, user: userData } = response.data.data;
     
     TokenStore.setAccessToken(accessToken);
     TokenStore.setRefreshToken(refreshToken);
@@ -45,15 +43,15 @@ export function AuthProvider({ children }) {
 
   const register = useCallback(async (name, email, password) => {
     await api.post("/auth/register", { name, email, password });
-  }, []);
+    await login(email, password);
+  }, [login]);
 
   const logout = useCallback(async () => {
     try {
       const rfToken = TokenStore.getRefreshToken();
-      await api.post("/auth/logout", { refreshToken: rfToken }, {
-        headers: { Authorization: `Bearer ${TokenStore.getAccessToken()}` },
-      });
-    } catch (/* abaikan error logout */) {
+      await api.post("/auth/logout", { refreshToken: rfToken });
+    } catch {
+      /* abaikan error logout */
     } finally {
       TokenStore.clear();
       setUser(null);

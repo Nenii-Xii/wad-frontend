@@ -1,39 +1,77 @@
+// src/lib/axios.js
 import axios from "axios";
+import { TokenStore } from "./tokenStore";
 
-const axiosInstance = axios.create({
-  // Menghubungkan ke port backend capstone kamu
-  baseURL: "http://localhost:3000/api/v1", 
-  withCredentials: true, // Supaya cookie/session aman ikut terkirim
+const api = axios.create({
+  baseURL: "/api/v1",
+  timeout: 10000,
+  headers: { "Content-Type": "application/json" },
 });
 
-// Response Interceptor untuk handle refresh token otomatis (Langkah 14 Handbook)
-axiosInstance.interceptors.response.use(
+// —— REQUEST INTERCEPTOR ——
+api.interceptors.request.use(
+  (config) => {
+    const token = TokenStore.getAccessToken();
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// —— RESPONSE INTERCEPTOR ——
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) reject(error);
+    else resolve(token);
+  });
+  failedQueue = [];
+};
+
+api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const orig = error.config;
+    if (error.response?.status === 401 && !orig._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            orig.headers.Authorization = `Bearer ${token}`;
+            return api(orig);
+          })
+          .catch((err) => Promise.reject(err));
+      }
 
-    // Jika error 401 (Unauthorized) dan belum pernah melakukan retry
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+      orig._retry = true;
+      isRefreshing = true;
+
       try {
-        // Panggil endpoint refresh token di backend
-        const response = await axiosInstance.post("/auth/refresh");
-        const newToken = response.data.accessToken;
-
-        // Kirim sinyal ke SocketContext agar ikut reconnect (Langkah 14 Handbook)
-        window.dispatchEvent(new CustomEvent("token:refreshed", {
-          detail: { token: newToken }
-        }));
-
-        // Jalankan kembali request yang tadi sempat gagal
-        originalRequest.headers["Authorization"] = `Bearer ${newToken}`;
-        return axiosInstance(originalRequest);
-      } catch (refreshError) {
-        return Promise.reject(refreshError);
+        const refreshToken = TokenStore.getRefreshToken();
+        if (!refreshToken) throw new Error("No refresh token");
+        
+        const { data } = await axios.post("/api/v1/auth/refresh", { refreshToken });
+        const newToken = data.data.accessToken;
+        
+        TokenStore.setAccessToken(newToken);
+        processQueue(null, newToken);
+        
+        orig.headers.Authorization = `Bearer ${newToken}`;
+        return api(orig);
+      } catch (err) {
+        processQueue(err, null);
+        TokenStore.clear();
+        window.location.href = "/login";
+        return Promise.reject(err);
+      } finally {
+        isRefreshing = false;
       }
     }
     return Promise.reject(error);
   }
 );
 
-export default axiosInstance;
+export default api;

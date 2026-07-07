@@ -1,13 +1,13 @@
 import api from "../lib/axios";
 
 export const taskService = {
-  // Ambil semua task (dengan pagination & filter)
+  // Ambil semua task dengan filter & pagination
   getAll: async (params = {}) => {
     const { data } = await api.get("/tasks", { params });
-    return data; // { data: Task[], meta: { total, page, limit } }
+    return data;
   },
 
-  // Ambil satu task berdasarkan ID
+  // Ambil data satu task berdasarkan ID
   getById: async (id) => {
     const { data } = await api.get(`/tasks/${id}`);
     return data.data;
@@ -19,7 +19,7 @@ export const taskService = {
     return data.data;
   },
 
-  // Update task
+  // Perbarui data task (Edit)
   update: async (id, taskData) => {
     const { data } = await api.patch(`/tasks/${id}`, taskData);
     return data.data;

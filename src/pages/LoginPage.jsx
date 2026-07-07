@@ -17,10 +17,13 @@ export function LoginPage() {
   const onSubmit = async ({ email, password }) => {
     setApiError(null);
     try {
+      // Menembak login, menyimpan token ke store, dan mengisi state user
       await login(email, password);
+      // Alur navigasi otomatis pindah ke halaman tasks setelah sukses
       navigate("/tasks");
     } catch (err) {
-      const msg = err.response?.data?.error?.message || "Login gagal";
+      // Menangkap pesan eror spesifik dari penolak Joi/Auth di backend
+      const msg = err.response?.data?.error?.message || "Login gagal, silakan periksa kembali data Anda.";
       setApiError(msg);
     }
   };
