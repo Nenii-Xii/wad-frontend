@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
-import { taskService } from "../services/task.service";
+import { useState, useEffect, useCallback } from "react";
 import { Navbar } from "../components/Navbar";
 import { TaskCard } from "../components/TaskCard";
 import { TaskForm } from "../components/TaskForm";
-import { useSocket } from "../contexts/SocketContext";
+import { taskService } from "../services/task.service";
+import { useRealTimeTasks } from "../hooks/useRealTimeTasks";
 
 export function TasksPage() {
   const [tasks, setTasks] = useState([]);
@@ -11,18 +11,19 @@ export function TasksPage() {
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
-  const [filter, setFilter] = useState("ALL"); // —— State Filter Utama
+  const [filter, setFilter] = useState("ALL");
 
-  const { socket } = useSocket();
+  useRealTimeTasks(setTasks);
 
-  // Ambil semua task berdasarkan filter status (Langkah 15)
+  // READ — Mengambil semua data task dari backend (dilengkapi filter status)
   const fetchTasks = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = filter !== "ALL" ? { status: filter } : {};
+      const params = filter !== "ALL" ? { status: filter.toLowerCase() } : {};
       const res = await taskService.getAll(params);
-      setTasks(res.data || res);
+      
+      setTasks(res.data || []);
     } catch (err) {
       setError(err.response?.data?.error?.message || "Gagal memuat task");
     } finally {
@@ -34,54 +35,47 @@ export function TasksPage() {
     fetchTasks();
   }, [fetchTasks]);
 
-  // Real-time Event Listener (Week 9)
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleTaskCreated = (newTask) => {
-      setTasks((prev) => [newTask, ...prev]);
+  const preparePayload = (formData, isEditMode = false) => {
+    const payload = {
+      title: formData.title,
+      description: formData.description || "", 
+      status: formData.status ? formData.status.toLowerCase() : "todo",
+      priority: formData.priority ? formData.priority.toLowerCase() : "medium",
     };
 
-    const handleTaskUpdated = (updatedTask) => {
-      setTasks((prev) =>
-        prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
-      );
-    };
+    const rawDate = formData.dueDate ? String(formData.dueDate).trim() : "";
 
-    const handleTaskDeleted = ({ taskId }) => {
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    };
-
-    socket.on("task:created", handleTaskCreated);
-    socket.on("task:updated", handleTaskUpdated);
-    socket.on("task:deleted", handleTaskDeleted);
-
-    return () => {
-      socket.off("task:created", handleTaskCreated);
-      socket.off("task:updated", handleTaskUpdated);
-      socket.off("task:deleted", handleTaskDeleted);
-    };
-  }, [socket]);
-
-  // CREATE & UPDATE HANDLER
-  const handleCreate = async (formData) => {
-    try {
-      const newTask = await taskService.create(formData);
-      setTasks((prev) => [newTask, ...prev]);
-      setShowForm(false);
-    } catch (err) {
-      alert("Gagal membuat tugas baru");
+    if (rawDate === "" || rawDate.includes("Invalid Date")) {
+      payload.dueDate = isEditMode ? (editTarget?.dueDate ? editTarget.dueDate : null) : null;
+    } else {
+      const timestamp = Date.parse(rawDate);
+      if (!isNaN(timestamp)) {
+        payload.dueDate = new Date(timestamp).toISOString();
+      } else {
+        payload.dueDate = isEditMode ? (editTarget?.dueDate ? editTarget.dueDate : null) : null;
+      }
     }
+
+    return payload;
   };
 
-  const handleUpdate = async (formData) => {
+  // CREATE — Membuat data task baru
+  const handleCreate = async (formData) => {
     try {
-      const updated = await taskService.update(editTarget.id, formData);
-      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      const cleanData = preparePayload(formData, false);
+      const res = await taskService.create(cleanData);
+      
+      const newTask = res.data?.data || res.data || res; 
+      
+      setTasks((prev) => {
+        const exists = prev.some(t => t.id === newTask.id);
+        if (exists) return prev;
+        return [newTask, ...prev];
+      });
+      
       setShowForm(false);
-      setEditTarget(null);
     } catch (err) {
-      alert("Gagal memperbarui tugas");
+      alert(err.response?.data?.error?.message || "Gagal membuat task");
     }
   };
 
@@ -90,13 +84,28 @@ export function TasksPage() {
     setShowForm(true);
   };
 
+  // UPDATE — Menyimpan perubahan data task lama
+  const handleUpdate = async (formData) => {
+    try {
+      const cleanData = preparePayload(formData, true);
+      const updated = await taskService.update(editTarget.id, cleanData);
+      
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setShowForm(false);
+      setEditTarget(null);
+    } catch (err) {
+      alert(err.response?.data?.error?.message || "Gagal memperbarui task");
+    }
+  };
+
+  // DELETE — Menghapus data task dari backend dan UI
   const handleDelete = async (id) => {
     if (!window.confirm("Yakin ingin menghapus task ini?")) return;
     try {
       await taskService.remove(id);
       setTasks((prev) => prev.filter((t) => t.id !== id));
     } catch (err) {
-      alert("Gagal menghapus tugas");
+      alert(err.response?.data?.error?.message || "Gagal menghapus task");
     }
   };
 
@@ -116,7 +125,6 @@ export function TasksPage() {
           </button>
         </div>
 
-        {/* —— FILTER BAR (Halaman 31) —— */}
         <div className="filter-bar">
           {["ALL", "TODO", "IN_PROGRESS", "DONE"].map((s) => (
             <button
@@ -129,7 +137,6 @@ export function TasksPage() {
           ))}
         </div>
 
-        {/* —— CONTENT VIEW —— */}
         {loading && <p className="state-msg">Memuat task...</p>}
         {error && <p className="state-msg error">{error}</p>}
         {!loading && !error && tasks.length === 0 && (
@@ -147,7 +154,6 @@ export function TasksPage() {
           ))}
         </div>
 
-        {/* —— MODAL POPUP FORM —— */}
         {showForm && (
           <TaskForm
             onSubmit={editTarget ? handleUpdate : handleCreate}
